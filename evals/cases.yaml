@@ -1,0 +1,47 @@
+# Eval cases for the chat agent, checked against the actual generated
+# dataset (data/profiles/*.json from the `cvscreener generate --seed 7 --n
+# 12` run — see NOTES.md). Ground truth was verified directly against the
+# generated JSON, not guessed.
+#
+# Each case:
+#   question           - sent to the agent as a fresh conversation
+#   expect_contains    - substrings that MUST appear in the final answer
+#   expect_not_contains- substrings that must NOT appear (catches
+#                        hallucinated/wrong candidates)
+#   expect_no_match    - true if the answer should plainly say nobody matches
+#   require_tool_call  - true if the agent must have called >=1 tool
+#                        (checked against message history, not the answer
+#                        text) — this is the "doesn't just answer from
+#                        memory" requirement.
+
+- id: python_experience
+  question: "Who has experience with Python?"
+  expect_contains: ["Frederick Peterson", "Kevin Bauer", "Brian Tate"]
+  require_tool_call: true
+
+- id: spanish_speakers
+  question: "Which candidates speak Spanish?"
+  expect_contains: ["Amy Brown"]
+  expect_not_contains: ["Kevin Bauer", "Frederick Peterson", "Mario Hernandez"]
+  require_tool_call: true
+
+- id: best_fit_senior_ml
+  question: "Who would be the best fit for a senior ML role?"
+  expect_contains: ["Brian Tate"]
+  require_tool_call: true
+
+- id: summarize_named_candidate
+  question: "Summarize the profile of Kevin Bauer"
+  expect_contains: ["Kevin Bauer", "Backend Engineer"]
+  require_tool_call: true
+
+- id: no_match_query
+  question: "Who has over 20 years of experience and also speaks Klingon?"
+  expect_no_match: true
+  require_tool_call: true
+
+- id: devops_role_filter
+  question: "Which candidates work as DevOps engineers?"
+  expect_contains: ["Mario Hernandez"]
+  expect_not_contains: ["Kevin Bauer", "Brian Tate"]
+  require_tool_call: true

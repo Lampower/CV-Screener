@@ -16,5 +16,30 @@ services:
       timeout: 5s
       retries: 10
 
+  # S3-compatible object storage for generated photos + PDF resumes.
+  # `minio/minio` stopped publishing free Docker images in Oct 2025 and
+  # archived the repo in 2026 (see NOTES.md). pgsty/minio is the
+  # community-maintained fork (https://github.com/pgsty/silo) — same
+  # server binary, same S3 API, same env vars, just a Docker Hub account
+  # that still ships free images.
+  storage:
+    image: pgsty/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: cvscreener
+      MINIO_ROOT_PASSWORD: cvscreener-storage
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - cvscreener_s3data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   cvscreener_pgdata:
+  cvscreener_s3data:

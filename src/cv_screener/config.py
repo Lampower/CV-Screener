@@ -21,6 +21,13 @@ DATABASE_URL = os.environ.get(
     "postgresql+psycopg://cvscreener:cvscreener@localhost:5432/cvscreener",
 )
 
+# S3-compatible object storage (pgsty/minio — see docker-compose.yml for
+# why this isn't minio/minio) for generated photos + PDF resumes.
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "http://localhost:9000")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "cvscreener")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "cvscreener-storage")
+S3_BUCKET = os.environ.get("S3_BUCKET", "cv-screener")
+
 CHAT_MODEL = "gpt-4o-mini"
 IMAGE_MODEL = "gpt-image-1"
 EMBEDDING_MODEL = "text-embedding-3-small"

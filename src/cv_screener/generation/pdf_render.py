@@ -7,9 +7,8 @@ Windows without extra native libraries.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from fpdf import FPDF
+from PIL import Image
 
 from cv_screener.schemas import CandidateProfile
 
@@ -43,7 +42,12 @@ class ResumePDF(FPDF):
     pass
 
 
-def render_resume(profile: CandidateProfile, out_path: Path) -> Path:
+def render_resume(profile: CandidateProfile, photo: Image.Image | None = None) -> bytes:
+    """Renders `profile` to a one-page PDF and returns the raw PDF bytes
+    (nothing is written to local disk — the caller uploads them to
+    storage). `photo`, if given, is an in-memory PIL image (see
+    `generation/photos.py`), embedded directly without a round trip
+    through the filesystem or object storage."""
     pdf = ResumePDF(format="A4", unit="mm")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -54,8 +58,8 @@ def render_resume(profile: CandidateProfile, out_path: Path) -> Path:
     text_x = left_x + photo_size + 6
 
     # --- Header: photo + name/title/contact ---
-    if profile.photo_path and Path(profile.photo_path).exists():
-        pdf.image(profile.photo_path, x=left_x, y=15, w=photo_size, h=photo_size)
+    if photo is not None:
+        pdf.image(photo, x=left_x, y=15, w=photo_size, h=photo_size)
 
     pdf.set_xy(text_x, 15)
     pdf.set_font("Helvetica", "B", 18)
@@ -133,6 +137,4 @@ def render_resume(profile: CandidateProfile, out_path: Path) -> Path:
         pdf.set_font("Helvetica", "", 10)
         pdf.multi_cell(0, 5.5, _s(", ".join(profile.languages)), new_x="LMARGIN", new_y="NEXT")
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    pdf.output(str(out_path))
-    return out_path
+    return bytes(pdf.output())

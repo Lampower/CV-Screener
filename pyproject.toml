@@ -22,6 +22,8 @@ fpdf2 = "^2.8"
 python-dotenv = "^1.0"
 pyyaml = "^6.0"
 rich = "^13.9"
+boto3 = "^1.35"
+pillow = "^11.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3"

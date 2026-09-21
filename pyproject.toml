@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "cv-screener"
+version = "0.1.0"
+description = "Synthetic CV generation, vector+field search, and a tool-using chat agent over the dataset."
+authors = ["Lampower <123113309+Lampower@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{ include = "cv_screener", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+openai = "^1.51"
+langchain = "^0.3.7"
+langchain-openai = "^0.2.6"
+langchain-postgres = "^0.0.12"
+psycopg = { extras = ["binary"], version = "^3.2" }
+pgvector = "^0.2.5"
+sqlalchemy = "^2.0"
+pydantic = "^2.9"
+typer = "^0.13"
+faker = "^30.8"
+fpdf2 = "^2.8"
+python-dotenv = "^1.0"
+pyyaml = "^6.0"
+rich = "^13.9"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+
+[tool.poetry.scripts]
+cvscreener = "cv_screener.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

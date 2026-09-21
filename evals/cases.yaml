@@ -1,7 +1,10 @@
 # Eval cases for the chat agent, checked against the actual generated
-# dataset (data/profiles/*.json from the `cvscreener generate --seed 7 --n
-# 12` run — see NOTES.md). Ground truth was verified directly against the
-# generated JSON, not guessed.
+# dataset in data/profiles/*.json (an initial `--seed 7 --n 12` run plus a
+# later unseeded batch, 24 candidates total — see NOTES.md). Ground truth
+# (which candidates have Python, speak Spanish, etc.) was verified directly
+# against the generated JSON, not guessed. expect_not_contains only lists
+# specific names known NOT to match, so it stays valid even as more
+# candidates are added to the dataset.
 #
 # Each case:
 #   question           - sent to the agent as a fresh conversation

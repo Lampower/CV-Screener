@@ -8,15 +8,19 @@ about the dataset through a tool-calling chat agent — CLI only, OpenAI only.
 
 | Piece | Command | What it does |
 |---|---|---|
-| 1. Resume generation | `cvscreener generate --n 12` | Builds N diverse synthetic candidates: structured profile (Faker + curated role/company/education pools), an LLM-written summary (`gpt-4o-mini`), an AI headshot (`gpt-image-1`), and a one-page PDF resume (`fpdf2`). |
+| 1. Resume generation | `cvscreener generate --n 12` | Builds N diverse synthetic candidates: structured profile (Faker + curated role/company/education pools), an LLM-written summary (`gpt-4o-mini`), an AI headshot (`gpt-image-1`), and a one-page PDF resume (`fpdf2`). Photos and PDFs are uploaded straight to S3-compatible object storage. |
 | 2. Indexing + search | `cvscreener index`, `cvscreener search` | Embeds each candidate (`text-embedding-3-small`) into pgvector alongside structured fields; search works by field, by meaning, or both. |
 | 3. Chat agent | `cvscreener chat` | A `gpt-4o-mini` tool-calling agent that answers questions about the dataset by calling search tools — it never gets the dataset dumped into its prompt. |
+
+Candidate profile JSON (structured fields) lives in `data/profiles/`; the
+binary photo and PDF assets live in object storage, not on local disk —
+see "Object storage" below.
 
 ## Requirements
 
 - Python 3.11+ (tested on 3.11; **not** 3.14 — see note below)
 - [Poetry](https://python-poetry.org/)
-- Docker Desktop (for the Postgres/pgvector container)
+- Docker Desktop (for the Postgres/pgvector and object-storage containers)
 - An OpenAI API key
 
 > **Python version note:** this project was built and tested against Python
@@ -33,7 +37,7 @@ about the dataset through a tool-calling chat agent — CLI only, OpenAI only.
 # 1. Clone and enter the repo
 cd cv-screener
 
-# 2. Start Postgres with the pgvector extension
+# 2. Start Postgres (pgvector) and object storage (pgsty/minio)
 docker compose up -d
 
 # 3. Install Python dependencies (creates a venv managed by Poetry)
@@ -42,7 +46,7 @@ poetry install
 # 4. Configure your API key
 cp .env.example .env
 # then edit .env and set OPENAI_API_KEY=sk-...
-# (DATABASE_URL in .env.example already matches docker-compose.yml)
+# (DATABASE_URL/S3_* in .env.example already match docker-compose.yml)
 ```
 
 ## Run it
@@ -50,7 +54,8 @@ cp .env.example .env
 Each step is one command:
 
 ```bash
-# Generate >=10 synthetic candidates (writes to data/profiles, data/photos, data/resumes)
+# Generate >=10 synthetic candidates (profile JSON -> data/profiles/,
+# photos + PDF resumes -> object storage)
 poetry run cvscreener generate --n 12
 
 # Build the search index (structured fields -> Postgres table, embeddings -> pgvector)
@@ -97,6 +102,29 @@ Valid `--field` values: `full_name`, `role`, `seniority`, `location`,
 `skills`, `languages`, `companies`, `years_of_experience` (supports `5`,
 `>=5`, `>5`, `<=5`, `<5`).
 
+## Object storage
+
+Generated photos and PDF resumes are uploaded to S3-compatible object
+storage rather than written to local disk. `docker-compose.yml` runs
+**`pgsty/minio`** — a community-maintained fork of MinIO
+([pgsty/silo](https://github.com/pgsty/silo)) — instead of `minio/minio`,
+because MinIO stopped publishing free Docker images in October 2025 and
+later archived the repo entirely. The app only talks to it over the
+standard S3 API via `boto3`, so nothing is actually MinIO-specific; the
+`S3_*` variables in `.env` would work unchanged against real AWS S3 or any
+other S3-compatible service.
+
+- Browse everything at the web console: **http://localhost:9001**
+  (credentials: `S3_ACCESS_KEY` / `S3_SECRET_KEY` from `.env`).
+- Bucket layout: `photos/{candidate_id}.png`, `resumes/{candidate_id}.pdf`.
+- `cvscreener migrate-storage` is a one-time command for a dataset
+  generated before this feature existed: it uploads any local
+  `data/photos/*.png` / `data/resumes/*.pdf` still referenced by a profile,
+  updates that profile's JSON to point at the new object key, deletes the
+  local file once the upload is verified, and is safe to re-run (already
+  S3-backed profiles are skipped). Run `cvscreener index` afterwards to
+  refresh the metadata cached in Postgres/pgvector.
+
 ## Evals
 
 ```bash
@@ -113,11 +141,13 @@ the actual recorded output of the last run.
 poetry run pytest
 ```
 
-25 tests, all runnable **without** an API key and **without** a running
-database (verified with `OPENAI_API_KEY=` unset and no `docker compose up`).
-They cover the Pydantic schema, PDF rendering (including the Latin-1
-Unicode-sanitization edge case), the structured-field query builder, and
-the agent's tool wrappers (with the search/DB layer mocked out).
+31 tests, all runnable **without** an API key and **without** a running
+database or object storage (verified with `OPENAI_API_KEY=` unset and no
+`docker compose up`). They cover the Pydantic schema, PDF rendering
+(including the Latin-1 Unicode-sanitization edge case and in-memory photo
+embedding), the structured-field query builder, the S3 client wrapper (with
+`boto3` mocked out), and the agent's tool wrappers (with the search/DB
+layer mocked out).
 
 ## Architecture notes
 
@@ -139,26 +169,32 @@ the agent's tool wrappers (with the search/DB layer mocked out).
   expressions from `CandidateRow` columns without opening a connection,
   which is what makes `tests/test_filters.py` runnable with zero
   infrastructure.
+- **Photos never touch local disk.** `generation/photos.py` uploads the
+  resized headshot straight to object storage and hands the same in-memory
+  `PIL.Image` to `pdf_render.py`, which embeds it directly and returns raw
+  PDF bytes for `cli.py` to upload — no temp files, no re-download.
 
 ## Cost
 
-Budget target was $2-5. Actual spend for `--n 12` generation (12x
-`gpt-4o-mini` summary calls + 12x `gpt-image-1` low-quality 1024x1024
-headshots + 12 embeddings) plus the full eval run came in well under $1 —
-see `NOTES.md` for the breakdown.
+Budget target was $2-5. Actual spend across both generation batches (24
+candidates total: `gpt-4o-mini` summaries + `gpt-image-1` low-quality
+1024x1024 headshots + embeddings) plus multiple eval runs came in well
+under $1-2 — see `NOTES.md` for the breakdown. Object storage and Postgres
+are self-hosted via Docker, so they cost nothing beyond local disk.
 
 ## Repo layout
 
 ```
 src/cv_screener/
   schemas.py           CandidateProfile Pydantic model (embedding_text/metadata)
-  config.py             env loading, paths, model names
+  config.py             env loading, paths, model names, S3 settings
   db.py                   SQLAlchemy engine + the `candidates` structured-fields table
+  storage.py               S3 client wrapper (boto3) for photos + PDF resumes
   generation/
     pools.py                curated roles/companies/universities/languages for diversity
     profiles.py               Faker + pools sampling, gpt-4o-mini summary prose
-    photos.py                  gpt-image-1 headshot generation
-    pdf_render.py                fpdf2 one-page resume layout
+    photos.py                  gpt-image-1 headshot generation -> uploaded to storage
+    pdf_render.py                fpdf2 one-page resume layout, returns PDF bytes
   indexing/
     vectorstore.py             PGVector + OpenAIEmbeddings setup
     build_index.py               loads profiles -> populates both stores
@@ -167,10 +203,10 @@ src/cv_screener/
   agent/
     tools.py                     the 3 LangChain tools the agent calls
     chat_agent.py                  manual tool-call loop + system prompt
-  cli.py                            Typer app: generate / index / search / chat
+  cli.py                            Typer app: generate / migrate-storage / index / search / chat
 evals/
   cases.yaml, run_evals.py         6 question/expectation cases, pass/fail runner
-tests/                              25 tests, no API key / DB required
+tests/                              31 tests, no API key / DB / storage required
 ```
 
 ## What I'd do next

@@ -7,8 +7,9 @@ Guidance for Claude Code (or any future agent) working in this repo.
 A CV-screening test-task project: generates synthetic candidate resumes
 (PDF + photo + structured JSON), indexes them into Postgres/pgvector for
 field + semantic search, and answers questions about the dataset via a
-CLI tool-calling chat agent. See `README.md` for setup/run instructions and
-`PLAN.md` for the original design rationale.
+CLI tool-calling chat agent. Photos and PDF resumes live in S3-compatible
+object storage, not local disk. See `README.md` for setup/run instructions
+and `PLAN.md` for the original design rationale.
 
 ## Stack
 
@@ -20,6 +21,10 @@ CLI tool-calling chat agent. See `README.md` for setup/run instructions and
   `text-embedding-3-small` (embeddings)
 - Postgres + pgvector via Docker Compose (`docker-compose.yml`), accessed
   through `langchain-postgres` `PGVector` and plain SQLAlchemy
+- S3-compatible object storage via the same `docker-compose.yml`, running
+  **`pgsty/minio`** (not `minio/minio` — see the "Object storage" note
+  below), accessed only through the standard S3 API via `boto3`
+  (`storage.py`)
 
 ## Conventions
 
@@ -53,13 +58,30 @@ CLI tool-calling chat agent. See `README.md` for setup/run instructions and
   `patch("cv_screener.agent.tools.<name>", ...)`). Keep it that way —
   don't add a test that silently needs `OPENAI_API_KEY` or a live
   `docker compose up` container without marking/skipping it explicitly.
+- **Object storage note: `minio/minio` is intentionally not used.** MinIO
+  stopped publishing free Docker images in Oct 2025 and archived the repo
+  in 2026. `docker-compose.yml` runs `pgsty/minio`
+  (https://github.com/pgsty/silo), a community fork with the same server
+  binary and env vars. `storage.py` only ever calls the standard S3 API via
+  `boto3` — don't add MinIO-SDK-specific code (the `minio` Python package),
+  since the whole point is staying swappable to real S3 or another
+  S3-compatible backend with just an endpoint/credentials change.
+- **Photos/PDFs never touch local disk in `generate`.**
+  `generation/photos.py` uploads directly to storage and returns the
+  resized image in memory; `generation/pdf_render.py` embeds it and returns
+  raw PDF bytes for `cli.py` to upload. Only `data/profiles/*.json`
+  (structured fields) is local — keep it that way; don't reintroduce local
+  file writes for the binary assets. `cvscreener migrate-storage` exists
+  only to backfill datasets generated before storage.py existed; it isn't
+  part of the normal `generate` -> `index` -> `chat` flow.
 
 ## Common commands
 
 ```bash
-docker compose up -d                          # start Postgres/pgvector
+docker compose up -d                          # start Postgres/pgvector + object storage
 poetry install                                # install deps
 poetry run cvscreener generate --n 12 --seed 7
+poetry run cvscreener migrate-storage         # one-time: only for pre-storage.py datasets
 poetry run cvscreener index
 poetry run cvscreener search "<query>" [--field F --value V]
 poetry run cvscreener chat

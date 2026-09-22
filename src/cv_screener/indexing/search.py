@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from cv_screener import db
 from cv_screener.indexing.filters import build_filter
 from cv_screener.indexing.vectorstore import get_vectorstore
+from cv_screener.models import CandidateRow
 
 
 @dataclass
@@ -53,7 +54,7 @@ def semantic_search(query: str, k: int = 5) -> list[SearchResult]:
 def filter_search(field: str, value: str, k: int = 20) -> list[SearchResult]:
     condition = build_filter(field, value)
     with db.get_session() as session:
-        rows = session.query(db.CandidateRow).filter(condition).limit(k).all()
+        rows = session.query(CandidateRow).filter(condition).limit(k).all()
         return [
             SearchResult(
                 id=r.id,
@@ -80,7 +81,7 @@ def hybrid_search(
 
     condition = build_filter(field, value)
     with db.get_session() as session:
-        matching_ids = {row.id for row in session.query(db.CandidateRow.id).filter(condition).all()}
+        matching_ids = {row.id for row in session.query(CandidateRow.id).filter(condition).all()}
     if not matching_ids:
         return []
 
@@ -92,8 +93,8 @@ def hybrid_search(
 def get_by_name(name: str) -> SearchResult | None:
     with db.get_session() as session:
         row = (
-            session.query(db.CandidateRow)
-            .filter(db.CandidateRow.full_name.ilike(f"%{name}%"))
+            session.query(CandidateRow)
+            .filter(CandidateRow.full_name.ilike(f"%{name}%"))
             .first()
         )
     if not row:

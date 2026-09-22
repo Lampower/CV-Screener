@@ -1,4 +1,4 @@
-"""Database connection helpers + the structured-fields table.
+"""Database connection helpers (engine/session/schema init).
 
 Two things live in Postgres, side by side:
 
@@ -6,45 +6,22 @@ Two things live in Postgres, side by side:
    embedding vectors plus a copy of each candidate's metadata as jsonb.
    This is the "resumes go into the vector store together with structured
    fields" requirement, and it's what semantic search queries.
-2. A plain `candidates` table defined here — the same structured fields as
-   normal SQL columns/JSON, owned entirely by this app. Field search
-   (`filter_search`) queries this table directly with `WHERE` clauses
-   instead of reaching into langchain_postgres' internal schema, which
-   keeps field search simple, fast, and independent of that library's
-   internal table layout.
+2. A plain `candidates` table (model in `models.py`) — the same structured
+   fields as normal SQL columns/JSON, owned entirely by this app. Field
+   search (`filter_search`) queries this table directly with `WHERE`
+   clauses instead of reaching into langchain_postgres' internal schema,
+   which keeps field search simple, fast, and independent of that
+   library's internal table layout.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, create_engine, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from cv_screener.config import DATABASE_URL
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class CandidateRow(Base):
-    """Structured fields for one candidate, mirrored from CandidateProfile."""
-
-    __tablename__ = "candidates"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    full_name: Mapped[str] = mapped_column(String, index=True)
-    role: Mapped[str] = mapped_column(String, index=True)
-    seniority: Mapped[str] = mapped_column(String, index=True)
-    years_of_experience: Mapped[int] = mapped_column(Integer)
-    location: Mapped[str] = mapped_column(String)
-    skills: Mapped[list] = mapped_column(JSONB)
-    languages: Mapped[list] = mapped_column(JSONB)
-    companies: Mapped[list] = mapped_column(JSONB)
-    resume_pdf_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    photo_path: Mapped[str | None] = mapped_column(String, nullable=True)
-
+from cv_screener.models import Base
 
 _engine: Engine | None = None
 

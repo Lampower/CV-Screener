@@ -30,8 +30,9 @@ and `PLAN.md` for the original design rationale.
 
 - **Two data stores, deliberately.** `PGVector` (langchain_postgres) holds
   embeddings + a metadata copy for semantic search. A separate
-  `CandidateRow` SQL table (`db.py`) holds the same structured fields as
-  real columns, used only for field search. Don't try to unify these —
+  `CandidateRow` SQL table (model in `models.py`, connection/session
+  helpers in `db.py`) holds the same structured fields as real columns,
+  used only for field search. Don't try to unify these —
   keeping field search off langchain's internal table schema is what makes
   it simple and version-stable.
 - **`indexing/filters.py` must stay DB-free.** It only builds SQLAlchemy

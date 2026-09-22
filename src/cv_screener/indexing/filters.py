@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from sqlalchemy import ColumnElement
 
-from cv_screener.db import CandidateRow
+from cv_screener.models import CandidateRow
 from cv_screener.generation.pools import (
     COMPANIES,
     LANGUAGE_POOL,

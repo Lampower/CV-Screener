@@ -10,6 +10,7 @@ from __future__ import annotations
 from cv_screener import db
 from cv_screener.config import PROFILES_DIR
 from cv_screener.indexing.vectorstore import get_vectorstore
+from cv_screener.models import CandidateRow
 from cv_screener.schemas import CandidateProfile
 
 
@@ -30,10 +31,10 @@ def build_index(profiles: list[CandidateProfile] | None = None) -> int:
 
     db.init_schema()
     with db.get_session() as session:
-        session.query(db.CandidateRow).delete()
+        session.query(CandidateRow).delete()
         for p in profiles:
             session.add(
-                db.CandidateRow(
+                CandidateRow(
                     id=p.id,
                     full_name=p.full_name,
                     role=p.role,
